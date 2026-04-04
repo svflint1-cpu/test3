@@ -13,12 +13,12 @@ def normalize_space(text: str) -> str:
 
 def fetch_html() -> str:
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36"
-        ),
-        "Accept-Language": "ru,en;q=0.9,uk;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Connection": "keep-alive",
     }
+
     resp = requests.get(URL, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.text
