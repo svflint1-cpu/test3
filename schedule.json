@@ -1,0 +1,72 @@
+{
+  "source": "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/",
+  "updated_at": "2026-04-04T12:00:00Z",
+  "items": [
+    {
+      "train_no": "6008",
+      "route_from": "Пятихатки",
+      "route_to": "Днепр",
+      "station_from": "Верховцево",
+      "station_to": "Запорожье-Каменское",
+      "departure": "05:36",
+      "arrival": "06:46",
+      "duration": "1 ч 10 м",
+      "schedule": "Ежедневный график движения"
+    },
+    {
+      "train_no": "6010",
+      "route_from": "Пятихатки",
+      "route_to": "Днепр",
+      "station_from": "Верховцево",
+      "station_to": "Запорожье-Каменское",
+      "departure": "06:19",
+      "arrival": "07:22",
+      "duration": "1 ч 3 м",
+      "schedule": "Ежедневный график движения"
+    },
+    {
+      "train_no": "6018",
+      "route_from": "Пост Списывания",
+      "route_to": "Днепр",
+      "station_from": "Верховцево",
+      "station_to": "Запорожье-Каменское",
+      "departure": "09:21",
+      "arrival": "10:10",
+      "duration": "49 м",
+      "schedule": "Ежедневный график движения"
+    },
+    {
+      "train_no": "6022",
+      "route_from": "Кривой Рог",
+      "route_to": "Днепр",
+      "station_from": "Верховцево",
+      "station_to": "Запорожье-Каменское",
+      "departure": "12:20",
+      "arrival": "13:04",
+      "duration": "44 м",
+      "schedule": "Ежедневный график движения"
+    },
+    {
+      "train_no": "6038",
+      "route_from": "Пятихатки",
+      "route_to": "Днепр",
+      "station_from": "Верховцево",
+      "station_to": "Запорожье-Каменское",
+      "departure": "17:44",
+      "arrival": "18:31",
+      "duration": "47 м",
+      "schedule": "Ежедневный график движения"
+    },
+    {
+      "train_no": "6044",
+      "route_from": "Пост Списывания",
+      "route_to": "Днепр",
+      "station_from": "Верховцево",
+      "station_to": "Запорожье-Каменское",
+      "departure": "21:40",
+      "arrival": "22:26",
+      "duration": "46 м",
+      "schedule": "Ежедневный график движения"
+    }
+  ]
+}

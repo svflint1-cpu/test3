@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Электрички Верховцево → Каменское</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#111827; --panel2:#1f2937; --line:#243244;
+      --text:#f8fafc; --muted:#94a3b8; --ok:#22c55e;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(180deg,#0b1220 0%,#0f172a 100%);color:var(--text);padding:18px}
+    .wrap{max-width:900px;margin:0 auto}
+    .hero{background:linear-gradient(135deg,rgba(34,197,94,.16),rgba(59,130,246,.12));border:1px solid #233147;border-radius:20px;padding:18px;margin-bottom:16px}
+    h1{margin:0 0 8px;font-size:28px}
+    .muted{color:var(--muted);line-height:1.5}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    button,a.btn{border:none;border-radius:12px;padding:12px 14px;font-weight:700;cursor:pointer;text-decoration:none}
+    button{background:linear-gradient(135deg,#22c55e,#16a34a);color:#08150d}
+    a.btn{background:#1e293b;color:#f8fafc}
+    .status{background:#172033;border:1px solid #243244;color:#cbd5e1;border-radius:14px;padding:12px 14px;margin-bottom:14px;white-space:pre-line}
+    table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:16px;overflow:hidden}
+    th,td{padding:14px 12px;border-bottom:1px solid var(--line);text-align:left}
+    th{background:var(--panel2);font-size:14px}
+    tr:hover td{background:#172033}
+    .time{font-weight:700;font-size:18px}
+    .small{color:var(--muted);font-size:13px;line-height:1.5;margin-top:14px}
+    .pill{display:inline-block;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.24);color:#bbf7d0;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="pill">Живое обновление через GitHub Actions</div>
+      <h1>🚆 Верховцево → Каменское</h1>
+      <div class="muted">Этот файл берёт данные из <b>schedule.json</b>. GitHub Actions обновляет JSON по расписанию, а HTML просто показывает свежие данные.</div>
+      <div class="toolbar">
+        <button id="refreshBtn">Обновить</button>
+        <a class="btn" href="schedule.json" target="_blank" rel="noopener noreferrer">Открыть JSON</a>
+        <a class="btn" href="https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/" target="_blank" rel="noopener noreferrer">Источник</a>
+      </div>
+    </div>
+
+    <div id="status" class="status">Загрузка...</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Поезд</th>
+          <th>Маршрут</th>
+          <th>Отправление</th>
+          <th>Прибытие</th>
+          <th>В пути</th>
+          <th>График</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="small">
+      Если таблица не обновилась сразу после коммита, подожди чуть-чуть или открой страницу с <code>?v=2</code>, чтобы пробить кэш.
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      try {
+        tg.setHeaderColor("#0f172a");
+        tg.setBackgroundColor("#0f172a");
+      } catch (e) {}
+    }
+
+    const statusEl = document.getElementById("status");
+    const tbody = document.getElementById("tbody");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function render(data) {
+      const items = Array.isArray(data.items) ? data.items : [];
+      tbody.innerHTML = "";
+
+      for (const item of items) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(item.train_no)}</td>
+          <td>${escapeHtml(item.route_from)} → ${escapeHtml(item.route_to)}</td>
+          <td class="time">${escapeHtml(item.departure)}</td>
+          <td class="time">${escapeHtml(item.arrival)}</td>
+          <td>${escapeHtml(item.duration)}</td>
+          <td>${escapeHtml(item.schedule || "не указан")}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      const updated = data.updated_at ? new Date(data.updated_at).toLocaleString("ru-RU") : "неизвестно";
+      setStatus(`Найдено электричек: ${items.length}\nОбновлено: ${updated}`);
+    }
+
+    async function loadData() {
+      setStatus("Загружаю данные...");
+      try {
+        const res = await fetch("schedule.json?ts=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        render(data);
+      } catch (err) {
+        setStatus("Не удалось загрузить schedule.json: " + (err.message || err));
+      }
+    }
+
+    refreshBtn.addEventListener("click", loadData);
+    if (tg) {
+      tg.MainButton.setText("Обновить");
+      tg.MainButton.onClick(loadData);
+      tg.MainButton.show();
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
