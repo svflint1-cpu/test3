@@ -36,17 +36,17 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <div class="pill">Живое обновление для Елизаветки Олеговны</div>
+      <div class="pill">Живое обновление через GitHub Actions</div>
       <h1 id="pageTitle">🚆 Верховцево → Каменское</h1>
-      <div class="muted">Лиз это онлайн расписание в обе стороны: туда и обратно.</div>
+      <div class="muted">Онлайн расписание в обе стороны. Кнопка рядом переключает направление и подгружает отдельный JSON.</div>
       <div class="toolbar">
         <button id="refreshBtn">Обновить</button>
-        <button id="switchBtn">Каменское-Верховцево</button>
+        <button id="switchBtn">Обратное направление</button>
         <a id="sourceBtn" class="btn" href="https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/" target="_blank" rel="noopener noreferrer">Источник</a>
       </div>
       <div class="filters">
         <select id="timeFilter">
-          <option value="all">Все дуры</option>
+          <option value="all">Все поезда</option>
           <option value="morning">Только утренние (до 12:00)</option>
           <option value="day">Только дневные (12:00–18:00)</option>
           <option value="evening">Только вечерние (после 18:00)</option>
@@ -58,7 +58,7 @@
 
     <div class="grid">
       <div class="card">
-        <h2>Ближайшая дура</h2>
+        <h2>Ближайшая электричка</h2>
         <div id="nextTrainBox" class="big">—</div>
         <div id="nextTrainText" class="muted">Загрузка...</div>
       </div>
@@ -85,7 +85,7 @@
       <tbody id="tbody"></tbody>
     </table>
 
-    <div class="small">:)</div>
+    <div class="small">Направление переключается между файлами <code>schedule.json</code> и <code>schedule_reverse.json</code>.</div>
   </div>
 
 <script>
@@ -242,12 +242,10 @@ function switchRoute() {
   localStorage.setItem("train_route", currentRoute);
   loadData();
 }
-
 refreshBtn.addEventListener("click", loadData);
 switchBtn.addEventListener("click", switchRoute);
 timeFilter.addEventListener("change", renderAll);
 searchInput.addEventListener("input", renderAll);
-
 if (tg) {
   tg.MainButton.setText("Обновить");
   tg.MainButton.onClick(loadData);
