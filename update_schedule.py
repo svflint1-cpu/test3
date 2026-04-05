@@ -22,37 +22,27 @@ ROUTES = [
     },
 ]
 
-
 def normalize_space(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
 
-
 def fetch_html(url: str) -> str:
-    session = requests.Session()
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/123.0 Safari/537.36"
-        ),
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
         "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8,uk;q=0.7",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
         "Connection": "keep-alive",
     }
-    resp = session.get(url, headers=headers, timeout=30)
+    resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.text
-
 
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True).replace("\xa0", " ")
     lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
 
-    # Ищем заголовок таблицы НЕ по точному совпадению,
-    # а по наличию ключевых слов в одной строке
     start_idx = -1
     for i, line in enumerate(lines):
         if all(word in line for word in ["Тип", "Номер", "Маршрут", "Отправление"]):
@@ -61,9 +51,7 @@ def parse_schedule(html: str):
 
     if start_idx == -1:
         preview = "\n".join(lines[:120])
-        raise RuntimeError(
-            "Не найден заголовок таблицы расписания. Начало текста:\\n" + preview
-        )
+        raise RuntimeError("Не найден заголовок таблицы расписания. Начало текста:\n" + preview)
 
     end_idx = len(lines)
     for i in range(start_idx + 1, len(lines)):
@@ -72,36 +60,24 @@ def parse_schedule(html: str):
             break
 
     block = lines[start_idx:end_idx]
-
-    train_positions = [
-        i for i, line in enumerate(block)
-        if re.fullmatch(r"\d{4,5}\*?", line)
-    ]
+    train_positions = [i for i, line in enumerate(block) if re.fullmatch(r"\d{4,5}\*?", line)]
 
     if not train_positions:
         preview = "\n".join(block[:80])
-        raise RuntimeError(
-            "Не удалось выделить строки поездов. Блок таблицы:\\n" + preview
-        )
+        raise RuntimeError("Не удалось выделить строки поездов. Блок таблицы:\n" + preview)
 
     records = []
-
     for idx, pos in enumerate(train_positions):
         next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(block)
         chunk = block[pos:next_pos]
 
         train_no = chunk[0].replace("*", "")
-
         times = [x for x in chunk if re.fullmatch(r"\d{2}\.\d{2}", x)]
         if len(times) < 2:
             continue
 
         departure, arrival = times[0], times[1]
-
-        duration = next(
-            (x for x in chunk if re.search(r"\d", x) and ("ч" in x or "м" in x)),
-            ""
-        )
+        duration = next((x for x in chunk if re.search(r"\d", x) and ("ч" in x or "м" in x)), "")
 
         schedule = ""
         for x in reversed(chunk):
@@ -121,7 +97,6 @@ def parse_schedule(html: str):
             dep_idx = chunk.index(times[0])
             if dep_idx + 1 < len(chunk):
                 station_from = chunk[dep_idx + 1]
-
             arr_idx = chunk.index(times[1], dep_idx + 1)
             if arr_idx + 1 < len(chunk):
                 station_to = chunk[arr_idx + 1]
@@ -142,9 +117,7 @@ def parse_schedule(html: str):
 
     if not records:
         preview = "\n".join(block[:120])
-        raise RuntimeError(
-            "После парсинга не осталось валидных записей. Блок таблицы:\\n" + preview
-        )
+        raise RuntimeError("После парсинга не осталось валидных записей. Блок таблицы:\n" + preview)
 
     return records
 
@@ -155,7 +128,6 @@ def load_previous(path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-
 
 def diff_items(old_items, new_items):
     old_map = {item["train_no"]: item for item in old_items}
@@ -188,28 +160,17 @@ def diff_items(old_items, new_items):
 
     return changes
 
-
 def send_telegram(text):
     token = os.getenv("BOT_TOKEN", "").strip()
     chat_id = os.getenv("CHAT_ID", "").strip()
     if not token or not chat_id:
         print("Telegram secrets не заданы, пропускаю уведомление.")
         return
-
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    resp = requests.post(
-        url,
-        json={
-            "chat_id": chat_id,
-            "text": text[:4096],
-            "disable_web_page_preview": True,
-        },
-        timeout=30,
-    )
+    resp = requests.post(url, json={"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": True}, timeout=30)
     resp.raise_for_status()
 
-
-def save_payload(path: Path, route_name: str, route_title: str, route_url: str, items, changes):
+def save_payload(path: Path, route_name: str, route_title: str, route_url: str, items, changes, error=None):
     payload = {
         "route_name": route_name,
         "route_title": route_title,
@@ -219,76 +180,43 @@ def save_payload(path: Path, route_name: str, route_title: str, route_url: str, 
         "changes": changes,
         "items": items,
     }
+    if error:
+        payload["error"] = error
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
 
 def process_route(route):
     previous = load_previous(route["output"])
-
     try:
         html = fetch_html(route["url"])
         items = parse_schedule(html)
     except Exception as e:
         print(f"Ошибка для маршрута {route['name']}: {e}")
-
-        # Если уже есть старые НЕпустые данные — оставляем их
         if previous and previous.get("items"):
             print(f"Оставляю старые непустые данные в {route['output']}")
             return False
-
-        # Если данных нет вообще — пишем явную заглушку
-        payload = {
-            "route_name": route["name"],
-            "route_title": route["title"],
-            "source": route["url"],
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "has_changes": False,
-            "changes": [f"Не удалось обновить маршрут: {e}"],
-            "items": [],
-            "error": str(e),
-        }
-        route["output"].write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
-        print(f"Сохранил пустой файл с ошибкой: {route['output']}")
+        save_payload(route["output"], route["name"], route["title"], route["url"], [], [f"Не удалось обновить маршрут: {e}"], str(e))
         return False
 
     old_items = previous.get("items", []) if previous else []
     changes = diff_items(old_items, items) if previous else []
 
-    payload = {
-        "route_name": route["name"],
-        "route_title": route["title"],
-        "source": route["url"],
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "has_changes": bool(changes),
-        "changes": changes,
-        "items": items,
-    }
-
-    route["output"].write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8"
-    )
+    save_payload(route["output"], route["name"], route["title"], route["url"], items, changes)
     print(f"Saved {len(items)} trains to {route['output']}")
 
     if changes:
-        message = f"⚠️ Изменилось расписание {route['title']}\\n\\n" + "\\n".join(changes[:20])
+        message = f"⚠️ Изменилось расписание {route['title']}\n\n" + "\n".join(changes[:20])
         send_telegram(message)
         print(f"Sent changes for {route['name']}: {len(changes)}")
     else:
         print(f"Изменений нет: {route['name']}")
-
     return True
+
 def main():
     results = []
     for route in ROUTES:
         results.append(process_route(route))
-
     if not any(results):
         print("Ни одно направление не обновилось, но workflow завершён без падения.")
-
 
 if __name__ == "__main__":
     main()
