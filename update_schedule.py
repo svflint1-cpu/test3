@@ -31,18 +31,8 @@ def normalize_space(text: str) -> str:
 
 
 def fetch_html(url: str) -> str:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36"
-        ),
-        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8,uk;q=0.7",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Connection": "keep-alive",
-    }
-    resp = requests.get(url, headers=headers, timeout=30)
+    proxy = "https://api.allorigins.win/raw?url=" + url
+    resp = requests.get(proxy, timeout=30)
     resp.raise_for_status()
     return resp.text
 
