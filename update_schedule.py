@@ -22,12 +22,7 @@ ROUTES = [
     },
 ]
 
-HEADER_RE = re.compile(
-    r"Тип\s+Номер\s+Маршрут\s+Отправление\s+Прибытие\s+В пути\s+График",
-    re.IGNORECASE,
-)
-
-TRAIN_START_RE = re.compile(r"^\d{4,5}\*?$")
+TRAIN_RE = re.compile(r"^\d{4,5}\*?$")
 TIME_RE = re.compile(r"^\d{2}\.\d{2}$")
 
 
@@ -54,52 +49,37 @@ def fetch_html(url: str) -> str:
 
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text("\n", strip=True).replace("\xa0", " ")
-    normalized_text = normalize_space(text)
+    raw_text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+    lines = [normalize_space(x) for x in raw_text.splitlines() if normalize_space(x)]
 
-    if not HEADER_RE.search(normalized_text):
-        preview = normalized_text[:1200]
-        raise RuntimeError(
-            "Не найден заголовок таблицы расписания. Начало текста:\n" + preview
-        )
-
-    lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
-
+    # Ищем начало таблицы по явной строке из сайта
     start_idx = None
     for i, line in enumerate(lines):
-        # Ищем строку, где есть все слова заголовка, даже если пробелы пляшут
-        compact = normalize_space(line)
-        if all(word in compact for word in ["Тип", "Номер", "Маршрут", "Отправление", "Прибытие", "График"]):
+        if line.startswith("Тип Номер Маршрут Отправление"):
             start_idx = i
             break
 
     if start_idx is None:
-        preview = "\n".join(lines[:120])
-        raise RuntimeError(
-            "Не удалось найти строку заголовка в lines. Начало текста:\n" + preview
-        )
+        preview = "\n".join(lines[:100])
+        raise RuntimeError("Не найдено начало таблицы. Начало текста:\n" + preview)
 
-    end_idx = len(lines)
+    # Конец таблицы
+    end_idx = None
     for i in range(start_idx + 1, len(lines)):
-        if "Выполнен поиск без указания даты." in lines[i]:
+        if lines[i].startswith("Выполнен поиск без указания даты."):
             end_idx = i
             break
+    if end_idx is None:
+        end_idx = len(lines)
 
-    block = lines[start_idx:end_idx]
+    block = lines[start_idx + 1:end_idx]
 
-    train_positions = [
-        i for i, line in enumerate(block)
-        if TRAIN_START_RE.fullmatch(line)
-    ]
-
+    train_positions = [i for i, line in enumerate(block) if TRAIN_RE.fullmatch(line)]
     if not train_positions:
-        preview = "\n".join(block[:120])
-        raise RuntimeError(
-            "Не удалось выделить строки поездов. Блок таблицы:\n" + preview
-        )
+        preview = "\n".join(block[:80])
+        raise RuntimeError("Не найдены номера поездов в блоке:\n" + preview)
 
     records = []
-
     for idx, pos in enumerate(train_positions):
         next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(block)
         chunk = block[pos:next_pos]
@@ -109,35 +89,43 @@ def parse_schedule(html: str):
         if len(times) < 2:
             continue
 
-        departure, arrival = times[0], times[1]
-        duration = next(
-            (x for x in chunk if re.search(r"\d", x) and ("ч" in x or "м" in x)),
-            "",
-        )
+        departure = times[0].replace(".", ":")
+        arrival = times[1].replace(".", ":")
 
-        schedule = ""
-        for x in reversed(chunk):
-            if "график" in x.lower():
-                schedule = x.replace(" - посмотреть", "")
-                break
-
-        route_from, route_to = "", ""
+        route_from = ""
+        route_to = ""
         if "→" in chunk:
             arrow_idx = chunk.index("→")
             if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
                 route_from = chunk[arrow_idx - 1]
                 route_to = chunk[arrow_idx + 1]
 
-        station_from, station_to = "", ""
+        station_from = ""
+        station_to = ""
         try:
-            dep_idx = chunk.index(departure)
+            dep_idx = chunk.index(times[0])
             if dep_idx + 1 < len(chunk):
                 station_from = chunk[dep_idx + 1]
-            arr_idx = chunk.index(arrival, dep_idx + 1)
+            arr_idx = chunk.index(times[1], dep_idx + 1)
             if arr_idx + 1 < len(chunk):
                 station_to = chunk[arr_idx + 1]
         except ValueError:
             pass
+
+        duration = ""
+        for item in chunk:
+            if re.search(r"\d", item) and ("ч" in item or "м" in item) and item not in times:
+                duration = item
+                break
+
+        schedule = ""
+        for item in reversed(chunk):
+            low = item.lower()
+            if "график движения" in low or "график" in low:
+                schedule = item.replace(" - посмотреть", "")
+                break
+        if not schedule:
+            schedule = "Ежедневный график движения"
 
         records.append({
             "train_no": train_no,
@@ -145,17 +133,15 @@ def parse_schedule(html: str):
             "route_to": route_to,
             "station_from": station_from,
             "station_to": station_to,
-            "departure": departure.replace(".", ":"),
-            "arrival": arrival.replace(".", ":"),
+            "departure": departure,
+            "arrival": arrival,
             "duration": duration,
             "schedule": schedule,
         })
 
     if not records:
         preview = "\n".join(block[:120])
-        raise RuntimeError(
-            "После парсинга не осталось валидных записей. Блок таблицы:\n" + preview
-        )
+        raise RuntimeError("После парсинга список поездов пуст. Блок:\n" + preview)
 
     return records
 
