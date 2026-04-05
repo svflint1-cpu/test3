@@ -212,46 +212,56 @@ def process_route(route):
     except Exception as e:
         print(f"Ошибка для маршрута {route['name']}: {e}")
 
-        # Если уже есть старый файл — не падаем всем workflow
-        if previous:
-            print(f"Оставляю старые данные в {route['output']}")
+        # Если уже есть старые НЕпустые данные — оставляем их
+        if previous and previous.get("items"):
+            print(f"Оставляю старые непустые данные в {route['output']}")
             return False
 
-        # Если файла ещё нет — создаём пустой, чтобы сайт не ломался
-        save_payload(
-            route["output"],
-            route["name"],
-            route["title"],
-            route["url"],
-            [],
-            [],
+        # Если данных нет вообще — пишем явную заглушку
+        payload = {
+            "route_name": route["name"],
+            "route_title": route["title"],
+            "source": route["url"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "has_changes": False,
+            "changes": [f"Не удалось обновить маршрут: {e}"],
+            "items": [],
+            "error": str(e),
+        }
+        route["output"].write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8"
         )
+        print(f"Сохранил пустой файл с ошибкой: {route['output']}")
         return False
 
     old_items = previous.get("items", []) if previous else []
     changes = diff_items(old_items, items) if previous else []
 
-    save_payload(
-        route["output"],
-        route["name"],
-        route["title"],
-        route["url"],
-        items,
-        changes,
-    )
+    payload = {
+        "route_name": route["name"],
+        "route_title": route["title"],
+        "source": route["url"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "has_changes": bool(changes),
+        "changes": changes,
+        "items": items,
+    }
 
+    route["output"].write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
     print(f"Saved {len(items)} trains to {route['output']}")
 
     if changes:
-        message = f"⚠️ Изменилось расписание {route['title']}\n\n" + "\n".join(changes[:20])
+        message = f"⚠️ Изменилось расписание {route['title']}\\n\\n" + "\\n".join(changes[:20])
         send_telegram(message)
         print(f"Sent changes for {route['name']}: {len(changes)}")
     else:
         print(f"Изменений нет: {route['name']}")
 
     return True
-
-
 def main():
     results = []
     for route in ROUTES:
