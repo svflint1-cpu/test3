@@ -49,115 +49,104 @@ def fetch_html(url: str) -> str:
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+    lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
 
-    start_marker = "Тип Номер Маршрут Отправление"
-    end_marker = "Выполнен поиск без указания даты."
+    # Ищем заголовок таблицы НЕ по точному совпадению,
+    # а по наличию ключевых слов в одной строке
+    start_idx = -1
+    for i, line in enumerate(lines):
+        if all(word in line for word in ["Тип", "Номер", "Маршрут", "Отправление"]):
+            start_idx = i
+            break
 
-    start_idx = text.find(start_marker)
+    if start_idx == -1:
+        preview = "\n".join(lines[:120])
+        raise RuntimeError(
+            "Не найден заголовок таблицы расписания. Начало текста:\\n" + preview
+        )
 
-    # Основной вариант — старая структура страницы
-    if start_idx != -1:
-        end_idx = text.find(end_marker, start_idx)
-        if end_idx == -1:
-            end_idx = len(text)
+    end_idx = len(lines)
+    for i in range(start_idx + 1, len(lines)):
+        if "Выполнен поиск без указания даты." in lines[i]:
+            end_idx = i
+            break
 
-        block = text[start_idx:end_idx]
-        lines = [normalize_space(x) for x in block.splitlines() if normalize_space(x)]
-        train_positions = [i for i, line in enumerate(lines) if re.match(r"^\d{4,5}\*?$", line)]
+    block = lines[start_idx:end_idx]
 
-        if train_positions:
-            records = []
-            for idx, pos in enumerate(train_positions):
-                next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(lines)
-                chunk = lines[pos:next_pos]
+    train_positions = [
+        i for i, line in enumerate(block)
+        if re.fullmatch(r"\d{4,5}\*?", line)
+    ]
 
-                train_no = chunk[0].replace("*", "")
-                times = [x for x in chunk if re.match(r"^\d{2}\.\d{2}$", x)]
-                if len(times) < 2:
-                    continue
-
-                departure, arrival = times[0], times[1]
-                duration = next((x for x in chunk if re.search(r"\bч\b|\bм\b", x) and re.search(r"\d", x)), "")
-                schedule = ""
-                for x in reversed(chunk):
-                    if "график" in x.lower():
-                        schedule = x.replace(" - посмотреть", "")
-                        break
-
-                arrow_idx = chunk.index("→") if "→" in chunk else -1
-                route_from, route_to = "", ""
-                if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
-                    route_from = chunk[arrow_idx - 1]
-                    route_to = chunk[arrow_idx + 1]
-
-                station_from, station_to = "", ""
-                try:
-                    dep_idx = chunk.index(departure)
-                    if dep_idx + 1 < len(chunk):
-                        station_from = chunk[dep_idx + 1]
-                    arr_idx = chunk.index(arrival, dep_idx + 1)
-                    if arr_idx + 1 < len(chunk):
-                        station_to = chunk[arr_idx + 1]
-                except ValueError:
-                    pass
-
-                records.append({
-                    "train_no": train_no,
-                    "route_from": route_from,
-                    "route_to": route_to,
-                    "station_from": station_from,
-                    "station_to": station_to,
-                    "departure": departure.replace(".", ":"),
-                    "arrival": arrival.replace(".", ":"),
-                    "duration": duration,
-                    "schedule": schedule,
-                })
-
-            if records:
-                return records
-
-    # Запасной вариант — если сайт отдал другую структуру
-    full_text = normalize_space(text)
-
-    # Пытаемся вытащить число электричек из описания
-    count_match = re.search(
-        r"включает\s+(\d+)\s+электрич",
-        full_text,
-        flags=re.IGNORECASE
-    )
-
-    # Пытаемся вытащить рекомендованную/скоростную электричку
-    fast_match = re.search(
-        r"отправляется\s+в\s+(\d{1,2})\s+ч\s+(\d{1,2})\s+м.*?прибывает.*?в\s+(\d{1,2})\s+ч\s+(\d{1,2})\s+м",
-        full_text,
-        flags=re.IGNORECASE
-    )
+    if not train_positions:
+        preview = "\n".join(block[:80])
+        raise RuntimeError(
+            "Не удалось выделить строки поездов. Блок таблицы:\\n" + preview
+        )
 
     records = []
 
-    if fast_match:
-        dep_h, dep_m, arr_h, arr_m = fast_match.groups()
-        departure = f"{int(dep_h):02d}:{int(dep_m):02d}"
-        arrival = f"{int(arr_h):02d}:{int(arr_m):02d}"
+    for idx, pos in enumerate(train_positions):
+        next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(block)
+        chunk = block[pos:next_pos]
+
+        train_no = chunk[0].replace("*", "")
+
+        times = [x for x in chunk if re.fullmatch(r"\d{2}\.\d{2}", x)]
+        if len(times) < 2:
+            continue
+
+        departure, arrival = times[0], times[1]
+
+        duration = next(
+            (x for x in chunk if re.search(r"\d", x) and ("ч" in x or "м" in x)),
+            ""
+        )
+
+        schedule = ""
+        for x in reversed(chunk):
+            if "график" in x.lower():
+                schedule = x.replace(" - посмотреть", "")
+                break
+
+        route_from, route_to = "", ""
+        if "→" in chunk:
+            arrow_idx = chunk.index("→")
+            if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
+                route_from = chunk[arrow_idx - 1]
+                route_to = chunk[arrow_idx + 1]
+
+        station_from, station_to = "", ""
+        try:
+            dep_idx = chunk.index(times[0])
+            if dep_idx + 1 < len(chunk):
+                station_from = chunk[dep_idx + 1]
+
+            arr_idx = chunk.index(times[1], dep_idx + 1)
+            if arr_idx + 1 < len(chunk):
+                station_to = chunk[arr_idx + 1]
+        except ValueError:
+            pass
 
         records.append({
-            "train_no": "—",
-            "route_from": "Каменское",
-            "route_to": "Верховцево",
-            "station_from": "Каменское",
-            "station_to": "Верховцево",
-            "departure": departure,
-            "arrival": arrival,
-            "duration": "",
-            "schedule": "Из текстового описания сайта",
+            "train_no": train_no,
+            "route_from": route_from,
+            "route_to": route_to,
+            "station_from": station_from,
+            "station_to": station_to,
+            "departure": departure.replace(".", ":"),
+            "arrival": arrival.replace(".", ":"),
+            "duration": duration,
+            "schedule": schedule,
         })
 
-    if records:
-        return records
+    if not records:
+        preview = "\n".join(block[:120])
+        raise RuntimeError(
+            "После парсинга не осталось валидных записей. Блок таблицы:\\n" + preview
+        )
 
-    preview = text[:1000]
-    raise RuntimeError(f"Не найден блок расписания на странице. Начало ответа: {preview}")
-
+    return records
 
 def load_previous(path: Path):
     if not path.exists():
