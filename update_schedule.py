@@ -50,110 +50,58 @@ def fetch_html(url: str) -> str:
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+
     lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
 
-    # Берём только хвост страницы после блока с расписанием, чтобы не ловить "2026" из заголовка.
-    start_idx = None
-    for i, line in enumerate(lines):
-        if line == "Электрички и пригородные поезда":
-            start_idx = i
-            break
-
-    if start_idx is None:
-        preview = "\n".join(lines[:120])
-        raise RuntimeError("Не найден блок 'Электрички и пригородные поезда'. Начало текста:\n" + preview)
-
-    end_idx = len(lines)
-    for i in range(start_idx + 1, len(lines)):
-        if lines[i].startswith("Выполнен поиск без указания даты.") or lines[i] == "Напишите нам":
-            end_idx = i
-            break
-
-    block = lines[start_idx:end_idx]
-
-    # Ищем номера поездов только внутри блока расписания.
-    train_positions = []
-    for i, line in enumerate(block):
-        if TRAIN_RE.fullmatch(line):
-            # Берём только если рядом реально есть времена — так не ловим цену, километры и т.п.
-            nearby = block[i:i+12]
-            times_near = [x for x in nearby if TIME_RE.fullmatch(x)]
-            if len(times_near) >= 2:
-                train_positions.append(i)
-
-    if not train_positions:
-        preview = "\n".join(block[:150])
-        raise RuntimeError("Не найдены поезда внутри блока расписания. Блок:\n" + preview)
-
     records = []
-    for idx, pos in enumerate(train_positions):
-        next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(block)
-        chunk = block[pos:next_pos]
 
-        train_no = chunk[0]
-        star = len(chunk) > 1 and chunk[1] == "*"
+    i = 0
+    while i < len(lines):
+        line = lines[i]
 
-        times = [x for x in chunk if TIME_RE.fullmatch(x)]
-        if len(times) < 2:
-            continue
+        # ищем номер поезда
+        if re.fullmatch(r"\d{4,5}", line):
+            train_no = line
 
-        dep_raw, arr_raw = times[0], times[1]
-        departure = dep_raw.replace(".", ":")
-        arrival = arr_raw.replace(".", ":")
+            chunk = lines[i:i+20]
 
-        route_from = ""
-        route_to = ""
-        if "→" in chunk:
-            arrow_idx = chunk.index("→")
-            if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
-                route_from = chunk[arrow_idx - 1]
-                route_to = chunk[arrow_idx + 1]
+            # ищем времена
+            times = [x for x in chunk if re.fullmatch(r"\d{2}\.\d{2}", x)]
 
-        station_from = ""
-        station_to = ""
-        try:
-            dep_idx = chunk.index(dep_raw)
-            if dep_idx + 1 < len(chunk):
-                station_from = chunk[dep_idx + 1]
-            arr_idx = chunk.index(arr_raw, dep_idx + 1)
-            if arr_idx + 1 < len(chunk):
-                station_to = chunk[arr_idx + 1]
-        except ValueError:
-            pass
+            if len(times) >= 2:
+                departure = times[0].replace(".", ":")
+                arrival = times[1].replace(".", ":")
 
-        duration = ""
-        for item in chunk:
-            if item not in {dep_raw, arr_raw} and re.search(r"\d", item) and ("ч" in item or "м" in item):
-                duration = item
-                break
+                route_from = ""
+                route_to = ""
 
-        schedule = ""
-        for item in reversed(chunk):
-            low = item.lower()
-            if "график" in low:
-                schedule = item.replace(" - посмотреть", "")
-                break
-        if not schedule:
-            schedule = "не указан"
+                if "→" in chunk:
+                    arrow_idx = chunk.index("→")
+                    if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
+                        route_from = chunk[arrow_idx - 1]
+                        route_to = chunk[arrow_idx + 1]
 
-        records.append({
-            "train_no": train_no + ("*" if star else ""),
-            "route_from": route_from,
-            "route_to": route_to,
-            "station_from": station_from,
-            "station_to": station_to,
-            "departure": departure,
-            "arrival": arrival,
-            "duration": duration,
-            "schedule": schedule,
-        })
+                records.append({
+                    "train_no": train_no,
+                    "route_from": route_from,
+                    "route_to": route_to,
+                    "station_from": route_from,
+                    "station_to": route_to,
+                    "departure": departure,
+                    "arrival": arrival,
+                    "duration": "",
+                    "schedule": "ежедневно"
+                })
+
+                i += 10
+                continue
+
+        i += 1
 
     if not records:
-        preview = "\n".join(block[:150])
-        raise RuntimeError("После парсинга список поездов пуст. Блок:\n" + preview)
+        raise RuntimeError("Не удалось извлечь поезда вообще")
 
     return records
-
 
 def load_previous(path: Path):
     if not path.exists():
