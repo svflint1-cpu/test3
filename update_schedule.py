@@ -7,115 +7,76 @@ from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
 
-ROUTES = [
-    {
-        "name": "forward",
-        "url": "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/",
-        "output": Path("schedule.json"),
-        "title": "Верховцево → Каменское",
-    },
-    {
-        "name": "reverse",
-        "url": "https://poizdato.net/ru/raspisanie-poezdov/kamenskoe--verhovtsevo/elektrichki/",
-        "output": Path("schedule_reverse.json"),
-        "title": "Каменское → Верховцево",
-    },
-]
-
-TRAIN_RE = re.compile(r"^\d{4,5}\*?$")
-TIME_RE = re.compile(r"^\d{2}\.\d{2}$")
-
+URL = "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/"
+OUTPUT = Path("schedule.json")
 
 def normalize_space(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
 
-
-def fetch_html(url: str) -> str:
-    proxy = "https://api.allorigins.win/raw?url=" + url
-    resp = requests.get(proxy, timeout=30)
+def fetch_html() -> str:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Connection": "keep-alive",
+    }
+    resp = requests.get(URL, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.text
 
-
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
-    raw_text = soup.get_text("\n", strip=True).replace("\xa0", " ")
-    lines = [normalize_space(x) for x in raw_text.splitlines() if normalize_space(x)]
+    text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+    start_marker = "Тип Номер Маршрут Отправление"
+    end_marker = "Выполнен поиск без указания даты."
 
-    # Ищем начало таблицы по явной строке из сайта
-    start_idx = None
-    for i, line in enumerate(lines):
-        if line.startswith("Тип Номер Маршрут Отправление"):
-            start_idx = i
-            break
+    start_idx = text.find(start_marker)
+    if start_idx == -1:
+        raise RuntimeError("Не найден блок расписания на странице.")
+    end_idx = text.find(end_marker, start_idx)
+    if end_idx == -1:
+        end_idx = len(text)
 
-    if start_idx is None:
-        preview = "\n".join(lines[:100])
-        raise RuntimeError("Не найдено начало таблицы. Начало текста:\n" + preview)
-
-    # Конец таблицы
-    end_idx = None
-    for i in range(start_idx + 1, len(lines)):
-        if lines[i].startswith("Выполнен поиск без указания даты."):
-            end_idx = i
-            break
-    if end_idx is None:
-        end_idx = len(lines)
-
-    block = lines[start_idx + 1:end_idx]
-
-    train_positions = [i for i, line in enumerate(block) if TRAIN_RE.fullmatch(line)]
+    block = text[start_idx:end_idx]
+    lines = [normalize_space(x) for x in block.splitlines() if normalize_space(x)]
+    train_positions = [i for i, line in enumerate(lines) if re.match(r"^\d{4,5}\*?$", line)]
     if not train_positions:
-        preview = "\n".join(block[:80])
-        raise RuntimeError("Не найдены номера поездов в блоке:\n" + preview)
+        raise RuntimeError("Не удалось выделить строки поездов.")
 
     records = []
     for idx, pos in enumerate(train_positions):
-        next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(block)
-        chunk = block[pos:next_pos]
+        next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(lines)
+        chunk = lines[pos:next_pos]
 
         train_no = chunk[0].replace("*", "")
-        times = [x for x in chunk if TIME_RE.fullmatch(x)]
+        times = [x for x in chunk if re.match(r"^\d{2}\.\d{2}$", x)]
         if len(times) < 2:
             continue
 
-        departure = times[0].replace(".", ":")
-        arrival = times[1].replace(".", ":")
+        departure, arrival = times[0], times[1]
+        duration = next((x for x in chunk if re.search(r"\bч\b|\bм\b", x) and re.search(r"\d", x)), "")
+        schedule = ""
+        for x in reversed(chunk):
+          if "график" in x.lower():
+              schedule = x.replace(" - посмотреть", "")
+              break
 
-        route_from = ""
-        route_to = ""
-        if "→" in chunk:
-            arrow_idx = chunk.index("→")
-            if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
-                route_from = chunk[arrow_idx - 1]
-                route_to = chunk[arrow_idx + 1]
+        arrow_idx = chunk.index("→") if "→" in chunk else -1
+        route_from, route_to = "", ""
+        if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
+            route_from = chunk[arrow_idx - 1]
+            route_to = chunk[arrow_idx + 1]
 
-        station_from = ""
-        station_to = ""
+        station_from, station_to = "", ""
         try:
-            dep_idx = chunk.index(times[0])
+            dep_idx = chunk.index(departure)
             if dep_idx + 1 < len(chunk):
                 station_from = chunk[dep_idx + 1]
-            arr_idx = chunk.index(times[1], dep_idx + 1)
+            arr_idx = chunk.index(arrival, dep_idx + 1)
             if arr_idx + 1 < len(chunk):
                 station_to = chunk[arr_idx + 1]
         except ValueError:
             pass
-
-        duration = ""
-        for item in chunk:
-            if re.search(r"\d", item) and ("ч" in item or "м" in item) and item not in times:
-                duration = item
-                break
-
-        schedule = ""
-        for item in reversed(chunk):
-            low = item.lower()
-            if "график движения" in low or "график" in low:
-                schedule = item.replace(" - посмотреть", "")
-                break
-        if not schedule:
-            schedule = "Ежедневный график движения"
 
         records.append({
             "train_no": train_no,
@@ -123,27 +84,23 @@ def parse_schedule(html: str):
             "route_to": route_to,
             "station_from": station_from,
             "station_to": station_to,
-            "departure": departure,
-            "arrival": arrival,
+            "departure": departure.replace(".", ":"),
+            "arrival": arrival.replace(".", ":"),
             "duration": duration,
             "schedule": schedule,
         })
 
     if not records:
-        preview = "\n".join(block[:120])
-        raise RuntimeError("После парсинга список поездов пуст. Блок:\n" + preview)
-
+        raise RuntimeError("После парсинга не осталось валидных записей.")
     return records
 
-
-def load_previous(path: Path):
-    if not path.exists():
+def load_previous():
+    if not OUTPUT.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(OUTPUT.read_text(encoding="utf-8"))
     except Exception:
         return None
-
 
 def diff_items(old_items, new_items):
     old_map = {item["train_no"]: item for item in old_items}
@@ -176,80 +133,46 @@ def diff_items(old_items, new_items):
 
     return changes
 
-
 def send_telegram(text):
     token = os.getenv("BOT_TOKEN", "").strip()
     chat_id = os.getenv("CHAT_ID", "").strip()
     if not token or not chat_id:
         print("Telegram secrets не заданы, пропускаю уведомление.")
         return
+
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    resp = requests.post(
-        url,
-        json={"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": True},
-        timeout=30,
-    )
+    resp = requests.post(url, json={
+        "chat_id": chat_id,
+        "text": text[:4096],
+        "disable_web_page_preview": True,
+    }, timeout=30)
     resp.raise_for_status()
 
+def main():
+    previous = load_previous()
+    html = fetch_html()
+    items = parse_schedule(html)
 
-def save_payload(path: Path, route_name: str, route_title: str, route_url: str, items, changes, error=None):
+    old_items = previous.get("items", []) if previous else []
+    changes = diff_items(old_items, items) if previous else []
+
     payload = {
-        "route_name": route_name,
-        "route_title": route_title,
-        "source": route_url,
+        "source": URL,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "has_changes": bool(changes),
         "changes": changes,
         "items": items,
     }
-    if error:
-        payload["error"] = error
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-
-def process_route(route):
-    previous = load_previous(route["output"])
-    try:
-        html = fetch_html(route["url"])
-        items = parse_schedule(html)
-    except Exception as e:
-        print(f"Ошибка для маршрута {route['name']}: {e}")
-        if previous and previous.get("items"):
-            print(f"Оставляю старые непустые данные в {route['output']}")
-            return False
-        save_payload(
-            route["output"],
-            route["name"],
-            route["title"],
-            route["url"],
-            [],
-            [f"Не удалось обновить маршрут: {e}"],
-            str(e),
-        )
-        return False
-
-    old_items = previous.get("items", []) if previous else []
-    changes = diff_items(old_items, items) if previous else []
-
-    save_payload(route["output"], route["name"], route["title"], route["url"], items, changes)
-    print(f"Saved {len(items)} trains to {route['output']}")
+    OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Saved {len(items)} trains to {OUTPUT}")
 
     if changes:
-        message = f"⚠️ Изменилось расписание {route['title']}\n\n" + "\n".join(changes[:20])
+        message = "⚠️ Изменилось расписание Верховцево → Каменское\\n\\n" + "\\n".join(changes[:20])
         send_telegram(message)
-        print(f"Sent changes for {route['name']}: {len(changes)}")
+        print(f"Sent changes: {len(changes)}")
     else:
-        print(f"Изменений нет: {route['name']}")
-    return True
-
-
-def main():
-    results = []
-    for route in ROUTES:
-        results.append(process_route(route))
-    if not any(results):
-        print("Ни одно направление не обновилось, но workflow завершён без падения.")
-
+        print("Изменений нет.")
 
 if __name__ == "__main__":
     main()
