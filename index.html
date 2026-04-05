@@ -40,19 +40,19 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <div class="pill">Живое обновление через GitHub Actions</div>
+      <div class="pill">Живое обновление для Елизаветки Олеговны</div>
       <h1>🚆 Верховцево → Каменское</h1>
-      <div class="muted">Теперь с ближайшей электричкой, фильтрами и отметкой, когда расписание изменилось.</div>
+      <div class="muted">Ты сможешь посмотреть ближайщие электрички здесь</div>
 
       <div class="toolbar">
         <button id="refreshBtn">Обновить</button>
-        <a class="btn" href="schedule.json" target="_blank" rel="noopener noreferrer">Открыть JSON</a>
+        <a class="btn" href="schedule.json" target="_blank" rel="noopener noreferrer">Каменское-Верховцево</a>
         <a class="btn" href="https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/" target="_blank" rel="noopener noreferrer">Источник</a>
       </div>
 
       <div class="filters">
         <select id="timeFilter">
-          <option value="all">Все поезда</option>
+          <option value="all">Все дуры</option>
           <option value="morning">Только утренние (до 12:00)</option>
           <option value="day">Только дневные (12:00–18:00)</option>
           <option value="evening">Только вечерние (после 18:00)</option>
@@ -65,7 +65,7 @@
 
     <div class="grid">
       <div class="card">
-        <h2>Ближайшая электричка</h2>
+        <h2>Ближайшая дура</h2>
         <div id="nextTrainBox" class="big">—</div>
         <div id="nextTrainText" class="muted">Загрузка...</div>
       </div>
@@ -82,7 +82,7 @@
     <table>
       <thead>
         <tr>
-          <th>Поезд</th>
+          <th>Дура</th>
           <th>Маршрут</th>
           <th>Отправление</th>
           <th>Прибытие</th>
@@ -94,7 +94,7 @@
     </table>
 
     <div class="small">
-      Фильтр работает по данным из <code>schedule.json</code>. Ближайший поезд считается по времени на твоём устройстве.
+      Фильтр работает по данным из <code>schedule.json</code>. Ближайший поезд считается по времени на твоём устройстве Лиз.
     </div>
   </div>
 
