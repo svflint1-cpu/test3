@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Электрички Верховцево ↔ Каменское</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{--bg:#0f172a;--panel:#111827;--panel2:#1f2937;--line:#243244;--text:#f8fafc;--muted:#94a3b8}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(180deg,#0b1220 0%,#0f172a 100%);color:var(--text);padding:18px}
+    .wrap{max-width:980px;margin:0 auto}
+    .hero{background:linear-gradient(135deg,rgba(34,197,94,.16),rgba(59,130,246,.12));border:1px solid #233147;border-radius:20px;padding:18px;margin-bottom:16px}
+    h1{margin:0 0 8px;font-size:28px}
+    .muted{color:var(--muted);line-height:1.5}
+    .toolbar,.filters{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    button,a.btn,select,input{border:none;border-radius:12px;padding:12px 14px;font-weight:700}
+    button{background:linear-gradient(135deg,#22c55e,#16a34a);color:#08150d;cursor:pointer}
+    a.btn{background:#1e293b;color:#f8fafc;text-decoration:none}
+    select,input{background:#172033;color:#f8fafc;border:1px solid #243244;font-weight:600}
+    .status,.card{background:#172033;border:1px solid #243244;color:#cbd5e1;border-radius:14px;padding:12px 14px}
+    .status{margin-bottom:14px;white-space:pre-line}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
+    .card h2{margin:0 0 8px;font-size:18px}
+    .big{font-size:28px;font-weight:800;color:#bbf7d0}
+    .small{color:var(--muted);font-size:13px;line-height:1.5;margin-top:14px}
+    .pill{display:inline-block;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.24);color:#bbf7d0;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700}
+    table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:16px;overflow:hidden}
+    th,td{padding:14px 12px;border-bottom:1px solid var(--line);text-align:left}
+    th{background:var(--panel2);font-size:14px}
+    tr:hover td{background:#172033}
+    .time{font-weight:700;font-size:18px}
+    @media (max-width:720px){.grid{grid-template-columns:1fr} table{font-size:14px} .time{font-size:16px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="pill">Живое обновление через GitHub Actions</div>
+      <h1 id="pageTitle">🚆 Верховцево → Каменское</h1>
+      <div class="muted" id="subtitle">Одна и та же страница показывает оба направления. Переключение идёт между <code>schedule.json</code> и <code>schedule_reverse.json</code>.</div>
+
+      <div class="toolbar">
+        <button id="refreshBtn">Обновить</button>
+        <button id="switchBtn">Обратное направление</button>
+        <a id="sourceBtn" class="btn" href="https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/" target="_blank" rel="noopener noreferrer">Источник</a>
+      </div>
+
+      <div class="filters">
+        <select id="timeFilter">
+          <option value="all">Все поезда</option>
+          <option value="morning">Только утренние (до 12:00)</option>
+          <option value="day">Только дневные (12:00–18:00)</option>
+          <option value="evening">Только вечерние (после 18:00)</option>
+          <option value="next">Только ближайший</option>
+        </select>
+        <input id="searchInput" type="text" placeholder="Поиск по номеру поезда" />
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Ближайшая электричка</h2>
+        <div id="nextTrainBox" class="big">—</div>
+        <div id="nextTrainText" class="muted">Загрузка...</div>
+      </div>
+      <div class="card">
+        <h2>Статус расписания</h2>
+        <div id="changeBox" class="big">—</div>
+        <div id="changeText" class="muted">Загрузка...</div>
+      </div>
+    </div>
+
+    <div id="status" class="status">Загрузка...</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Поезд</th>
+          <th>Маршрут</th>
+          <th>Отправление</th>
+          <th>Прибытие</th>
+          <th>В пути</th>
+          <th>График</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="small">Если GitHub Actions не смог обновить источник, страница покажет последние сохранённые данные.</div>
+  </div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  try {
+    tg.setHeaderColor("#0f172a");
+    tg.setBackgroundColor("#0f172a");
+  } catch (e) {}
+}
+const ROUTES = {
+  forward: {
+    title: "🚆 Верховцево → Каменское",
+    file: "schedule.json",
+    source: "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/",
+    switchLabel: "Обратное направление"
+  },
+  reverse: {
+    title: "🚆 Каменское → Верховцево",
+    file: "schedule_reverse.json",
+    source: "https://poizdato.net/ru/raspisanie-poezdov/kamenskoe--verhovtsevo/elektrichki/",
+    switchLabel: "Прямое направление"
+  }
+};
+const pageTitle = document.getElementById("pageTitle");
+const subtitle = document.getElementById("subtitle");
+const sourceBtn = document.getElementById("sourceBtn");
+const switchBtn = document.getElementById("switchBtn");
+const statusEl = document.getElementById("status");
+const tbody = document.getElementById("tbody");
+const refreshBtn = document.getElementById("refreshBtn");
+const timeFilter = document.getElementById("timeFilter");
+const searchInput = document.getElementById("searchInput");
+const nextTrainBox = document.getElementById("nextTrainBox");
+const nextTrainText = document.getElementById("nextTrainText");
+const changeBox = document.getElementById("changeBox");
+const changeText = document.getElementById("changeText");
+let currentRoute = localStorage.getItem("train_route") || "forward";
+let scheduleData = null;
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function setStatus(text) { statusEl.textContent = text; }
+function timeToMinutes(timeStr) {
+  const [h, m] = String(timeStr || "").split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+function nowMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+function getNextTrain(items) {
+  const now = nowMinutes();
+  const sorted = [...items].sort((a, b) => timeToMinutes(a.departure) - timeToMinutes(b.departure));
+  const next = sorted.find(item => timeToMinutes(item.departure) >= now);
+  return next || null;
+}
+function applyFilters(items) {
+  const searchValue = searchInput.value.trim().toLowerCase();
+  let filtered = [...items];
+  if (searchValue) filtered = filtered.filter(item => String(item.train_no).toLowerCase().includes(searchValue));
+  const mode = timeFilter.value;
+  if (mode === "morning") filtered = filtered.filter(item => timeToMinutes(item.departure) < 720);
+  else if (mode === "day") filtered = filtered.filter(item => { const t = timeToMinutes(item.departure); return t >= 720 && t < 1080; });
+  else if (mode === "evening") filtered = filtered.filter(item => timeToMinutes(item.departure) >= 1080);
+  else if (mode === "next") {
+    const next = getNextTrain(items);
+    filtered = next ? [next] : [];
+  }
+  return filtered;
+}
+function renderTable(items) {
+  tbody.innerHTML = "";
+  if (!items.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="6">Ничего не найдено по текущему маршруту или фильтру.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const item of items) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(item.train_no)}</td>
+      <td>${escapeHtml(item.route_from)} → ${escapeHtml(item.route_to)}</td>
+      <td class="time">${escapeHtml(item.departure)}</td>
+      <td class="time">${escapeHtml(item.arrival)}</td>
+      <td>${escapeHtml(item.duration || "")}</td>
+      <td>${escapeHtml(item.schedule || "не указан")}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+function renderNextTrain(items) {
+  const next = getNextTrain(items);
+  if (!next) {
+    nextTrainBox.textContent = "Нет";
+    nextTrainText.textContent = "На сегодня ближайших поездов больше нет.";
+    return;
+  }
+  const diff = timeToMinutes(next.departure) - nowMinutes();
+  nextTrainBox.textContent = next.departure;
+  nextTrainText.textContent = diff <= 0 ? `Сейчас ближайший поезд ${next.train_no}` : `Поезд ${next.train_no}, через ${diff} мин.`;
+}
+function renderChangeStatus(data) {
+  if (data.has_changes) {
+    changeBox.textContent = "Да";
+    const count = Array.isArray(data.changes) ? data.changes.length : 0;
+    changeText.textContent = `Последнее обновление изменило расписание. Изменений: ${count}.`;
+  } else {
+    changeBox.textContent = "Нет";
+    changeText.textContent = "Последнее обновление прошло без изменений.";
+  }
+}
+function applyRouteUI() {
+  const cfg = ROUTES[currentRoute];
+  pageTitle.textContent = cfg.title;
+  sourceBtn.href = cfg.source;
+  switchBtn.textContent = cfg.switchLabel;
+  subtitle.innerHTML = currentRoute === "forward"
+    ? 'Сейчас открыто основное направление из <code>schedule.json</code>.'
+    : 'Сейчас открыто обратное направление из <code>schedule_reverse.json</code>.';
+}
+function renderAll() {
+  const items = Array.isArray(scheduleData?.items) ? scheduleData.items : [];
+  const filtered = applyFilters(items);
+  renderTable(filtered);
+  renderNextTrain(items);
+  renderChangeStatus(scheduleData || {});
+  const updated = scheduleData?.updated_at ? new Date(scheduleData.updated_at).toLocaleString("ru-RU") : "неизвестно";
+  setStatus(`Найдено поездов: ${filtered.length}\nВсего в расписании: ${items.length}\nОбновлено: ${updated}`);
+}
+async function loadData() {
+  applyRouteUI();
+  setStatus("Загружаю данные...");
+  try {
+    const file = ROUTES[currentRoute].file;
+    const res = await fetch(file + "?ts=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    scheduleData = await res.json();
+    renderAll();
+  } catch (err) {
+    setStatus("Не удалось загрузить файл расписания: " + (err.message || err));
+  }
+}
+function switchRoute() {
+  currentRoute = currentRoute === "forward" ? "reverse" : "forward";
+  localStorage.setItem("train_route", currentRoute);
+  loadData();
+}
+refreshBtn.addEventListener("click", loadData);
+switchBtn.addEventListener("click", switchRoute);
+timeFilter.addEventListener("change", renderAll);
+searchInput.addEventListener("input", renderAll);
+if (tg) {
+  tg.MainButton.setText("Обновить");
+  tg.MainButton.onClick(loadData);
+  tg.MainButton.show();
+}
+loadData();
+</script>
+</body>
+</html>
