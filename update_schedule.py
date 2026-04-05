@@ -22,8 +22,20 @@ ROUTES = [
     },
 ]
 
-TRAIN_RE = re.compile(r"^\d{4,5}$")
-TIME_RE = re.compile(r"^\d{2}\.\d{2}$")
+RECORD_RE = re.compile(
+    r'(?P<train>\d{4,5})'
+    r'(?:\s+(?P<star>\*))?'
+    r'\s+(?P<route_from>.+?)'
+    r'\s+→\s+'
+    r'(?P<route_to>.+?)'
+    r'\s+(?P<dep>\d{2}\.\d{2})'
+    r'\s+(?P<station_from>.+?)'
+    r'\s+(?P<arr>\d{2}\.\d{2})'
+    r'\s+(?P<station_to>.+?)'
+    r'\s+(?P<duration>\d+\s*ч\s*\d+\s*м|\d+\s*м)'
+    r'(?=\s+\d{4,5}(?:\s+\*)?\s+|\s+Выполнен поиск без указания даты\.|\s+Напишите нам|\Z)',
+    re.IGNORECASE | re.DOTALL
+)
 
 
 def normalize_space(text: str) -> str:
@@ -49,59 +61,72 @@ def fetch_html(url: str) -> str:
 
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+    raw_text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+    text = normalize_space(raw_text)
 
-    lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
+    start_markers = [
+        "Электрички и пригородные поезда",
+        "Тип Номер Маршрут Отправление Прибытие В пути График",
+    ]
+
+    start_idx = -1
+    for marker in start_markers:
+        idx = text.find(marker)
+        if idx != -1:
+            start_idx = idx
+            break
+
+    if start_idx == -1:
+        raise RuntimeError("Не найден блок расписания на странице.")
+
+    block = text[start_idx:]
+
+    end_markers = [
+        "Выполнен поиск без указания даты.",
+        "Напишите нам",
+    ]
+    end_idx = len(block)
+    for marker in end_markers:
+        idx = block.find(marker)
+        if idx != -1:
+            end_idx = min(end_idx, idx)
+
+    block = block[:end_idx]
+    block = normalize_space(block)
 
     records = []
+    for match in RECORD_RE.finditer(block):
+        train_no = match.group("train")
+        if match.group("star"):
+            train_no += "*"
 
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-
-        # ищем номер поезда
-        if re.fullmatch(r"\d{4,5}", line):
-            train_no = line
-
-            chunk = lines[i:i+20]
-
-            # ищем времена
-            times = [x for x in chunk if re.fullmatch(r"\d{2}\.\d{2}", x)]
-
-            if len(times) >= 2:
-                departure = times[0].replace(".", ":")
-                arrival = times[1].replace(".", ":")
-
-                route_from = ""
-                route_to = ""
-
-                if "→" in chunk:
-                    arrow_idx = chunk.index("→")
-                    if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
-                        route_from = chunk[arrow_idx - 1]
-                        route_to = chunk[arrow_idx + 1]
-
-                records.append({
-                    "train_no": train_no,
-                    "route_from": route_from,
-                    "route_to": route_to,
-                    "station_from": route_from,
-                    "station_to": route_to,
-                    "departure": departure,
-                    "arrival": arrival,
-                    "duration": "",
-                    "schedule": "ежедневно"
-                })
-
-                i += 10
-                continue
-
-        i += 1
+        records.append({
+            "train_no": train_no,
+            "route_from": normalize_space(match.group("route_from")),
+            "route_to": normalize_space(match.group("route_to")),
+            "station_from": normalize_space(match.group("station_from")),
+            "station_to": normalize_space(match.group("station_to")),
+            "departure": match.group("dep").replace(".", ":"),
+            "arrival": match.group("arr").replace(".", ":"),
+            "duration": normalize_space(match.group("duration")),
+            "schedule": "ежедневно",
+        })
 
     if not records:
-        raise RuntimeError("Не удалось извлечь поезда вообще")
+        preview = block[:1500]
+        raise RuntimeError("Не удалось распарсить поезда. Блок: " + preview)
 
-    return records
+    # Убираем возможные дубли по номеру поезда, сохраняя порядок
+    seen = set()
+    deduped = []
+    for item in records:
+        if item["train_no"] in seen:
+            continue
+        seen.add(item["train_no"])
+        deduped.append(item)
+
+    return deduped
+
 
 def load_previous(path: Path):
     if not path.exists():
