@@ -22,12 +22,25 @@ ROUTES = [
     },
 ]
 
+HEADER_RE = re.compile(
+    r"Тип\s+Номер\s+Маршрут\s+Отправление\s+Прибытие\s+В пути\s+График",
+    re.IGNORECASE,
+)
+
+TRAIN_START_RE = re.compile(r"^\d{4,5}\*?$")
+TIME_RE = re.compile(r"^\d{2}\.\d{2}$")
+
+
 def normalize_space(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
 
+
 def fetch_html(url: str) -> str:
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36"
+        ),
         "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8,uk;q=0.7",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Cache-Control": "no-cache",
@@ -38,20 +51,33 @@ def fetch_html(url: str) -> str:
     resp.raise_for_status()
     return resp.text
 
+
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True).replace("\xa0", " ")
+    normalized_text = normalize_space(text)
+
+    if not HEADER_RE.search(normalized_text):
+        preview = normalized_text[:1200]
+        raise RuntimeError(
+            "Не найден заголовок таблицы расписания. Начало текста:\n" + preview
+        )
+
     lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
 
-    start_idx = -1
+    start_idx = None
     for i, line in enumerate(lines):
-        if all(word in line for word in ["Тип", "Номер", "Маршрут", "Отправление"]):
+        # Ищем строку, где есть все слова заголовка, даже если пробелы пляшут
+        compact = normalize_space(line)
+        if all(word in compact for word in ["Тип", "Номер", "Маршрут", "Отправление", "Прибытие", "График"]):
             start_idx = i
             break
 
-    if start_idx == -1:
+    if start_idx is None:
         preview = "\n".join(lines[:120])
-        raise RuntimeError("Не найден заголовок таблицы расписания. Начало текста:\n" + preview)
+        raise RuntimeError(
+            "Не удалось найти строку заголовка в lines. Начало текста:\n" + preview
+        )
 
     end_idx = len(lines)
     for i in range(start_idx + 1, len(lines)):
@@ -60,24 +86,34 @@ def parse_schedule(html: str):
             break
 
     block = lines[start_idx:end_idx]
-    train_positions = [i for i, line in enumerate(block) if re.fullmatch(r"\d{4,5}\*?", line)]
+
+    train_positions = [
+        i for i, line in enumerate(block)
+        if TRAIN_START_RE.fullmatch(line)
+    ]
 
     if not train_positions:
-        preview = "\n".join(block[:80])
-        raise RuntimeError("Не удалось выделить строки поездов. Блок таблицы:\n" + preview)
+        preview = "\n".join(block[:120])
+        raise RuntimeError(
+            "Не удалось выделить строки поездов. Блок таблицы:\n" + preview
+        )
 
     records = []
+
     for idx, pos in enumerate(train_positions):
         next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(block)
         chunk = block[pos:next_pos]
 
         train_no = chunk[0].replace("*", "")
-        times = [x for x in chunk if re.fullmatch(r"\d{2}\.\d{2}", x)]
+        times = [x for x in chunk if TIME_RE.fullmatch(x)]
         if len(times) < 2:
             continue
 
         departure, arrival = times[0], times[1]
-        duration = next((x for x in chunk if re.search(r"\d", x) and ("ч" in x or "м" in x)), "")
+        duration = next(
+            (x for x in chunk if re.search(r"\d", x) and ("ч" in x or "м" in x)),
+            "",
+        )
 
         schedule = ""
         for x in reversed(chunk):
@@ -94,10 +130,10 @@ def parse_schedule(html: str):
 
         station_from, station_to = "", ""
         try:
-            dep_idx = chunk.index(times[0])
+            dep_idx = chunk.index(departure)
             if dep_idx + 1 < len(chunk):
                 station_from = chunk[dep_idx + 1]
-            arr_idx = chunk.index(times[1], dep_idx + 1)
+            arr_idx = chunk.index(arrival, dep_idx + 1)
             if arr_idx + 1 < len(chunk):
                 station_to = chunk[arr_idx + 1]
         except ValueError:
@@ -117,9 +153,12 @@ def parse_schedule(html: str):
 
     if not records:
         preview = "\n".join(block[:120])
-        raise RuntimeError("После парсинга не осталось валидных записей. Блок таблицы:\n" + preview)
+        raise RuntimeError(
+            "После парсинга не осталось валидных записей. Блок таблицы:\n" + preview
+        )
 
     return records
+
 
 def load_previous(path: Path):
     if not path.exists():
@@ -128,6 +167,7 @@ def load_previous(path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
 
 def diff_items(old_items, new_items):
     old_map = {item["train_no"]: item for item in old_items}
@@ -160,6 +200,7 @@ def diff_items(old_items, new_items):
 
     return changes
 
+
 def send_telegram(text):
     token = os.getenv("BOT_TOKEN", "").strip()
     chat_id = os.getenv("CHAT_ID", "").strip()
@@ -167,8 +208,13 @@ def send_telegram(text):
         print("Telegram secrets не заданы, пропускаю уведомление.")
         return
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    resp = requests.post(url, json={"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": True}, timeout=30)
+    resp = requests.post(
+        url,
+        json={"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": True},
+        timeout=30,
+    )
     resp.raise_for_status()
+
 
 def save_payload(path: Path, route_name: str, route_title: str, route_url: str, items, changes, error=None):
     payload = {
@@ -184,6 +230,7 @@ def save_payload(path: Path, route_name: str, route_title: str, route_url: str, 
         payload["error"] = error
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
+
 def process_route(route):
     previous = load_previous(route["output"])
     try:
@@ -194,7 +241,15 @@ def process_route(route):
         if previous and previous.get("items"):
             print(f"Оставляю старые непустые данные в {route['output']}")
             return False
-        save_payload(route["output"], route["name"], route["title"], route["url"], [], [f"Не удалось обновить маршрут: {e}"], str(e))
+        save_payload(
+            route["output"],
+            route["name"],
+            route["title"],
+            route["url"],
+            [],
+            [f"Не удалось обновить маршрут: {e}"],
+            str(e),
+        )
         return False
 
     old_items = previous.get("items", []) if previous else []
@@ -211,12 +266,14 @@ def process_route(route):
         print(f"Изменений нет: {route['name']}")
     return True
 
+
 def main():
     results = []
     for route in ROUTES:
         results.append(process_route(route))
     if not any(results):
         print("Ни одно направление не обновилось, но workflow завершён без падения.")
+
 
 if __name__ == "__main__":
     main()
