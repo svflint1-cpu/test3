@@ -1,74 +1,81 @@
 {
   "source": "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/",
-  "updated_at": "2026-04-04T12:00:00+00:00",
-  "has_changes": false,
-  "changes": [],
+  "updated_at": "2026-04-05T06:48:14.927240+00:00",
+  "has_changes": true,
+  "changes": [
+    "⚠️ Поезд 6008: время в пути: 1 ч 10 м → ; график: Ежедневный график движения → ежедневно",
+    "⚠️ Поезд 6010: время в пути: 1 ч 3 м → ; график: Ежедневный график движения → ежедневно",
+    "⚠️ Поезд 6018: время в пути: 49 м → ; график: Ежедневный график движения → ежедневно",
+    "⚠️ Поезд 6022: время в пути: 44 м → ; график: Ежедневный график движения → ежедневно",
+    "⚠️ Поезд 6038: время в пути: 47 м → ; график: Ежедневный график движения → ежедневно",
+    "⚠️ Поезд 6044: время в пути: 46 м → ; график: Ежедневный график движения → ежедневно"
+  ],
   "items": [
     {
       "train_no": "6008",
       "route_from": "Пятихатки",
       "route_to": "Днепр",
-      "station_from": "Верховцево",
-      "station_to": "Запорожье-Каменское",
+      "station_from": "Пятихатки",
+      "station_to": "Днепр",
       "departure": "05:36",
       "arrival": "06:46",
-      "duration": "1 ч 10 м",
-      "schedule": "Ежедневный график движения"
+      "duration": "",
+      "schedule": "ежедневно"
     },
     {
       "train_no": "6010",
       "route_from": "Пятихатки",
       "route_to": "Днепр",
-      "station_from": "Верховцево",
-      "station_to": "Запорожье-Каменское",
+      "station_from": "Пятихатки",
+      "station_to": "Днепр",
       "departure": "06:19",
       "arrival": "07:22",
-      "duration": "1 ч 3 м",
-      "schedule": "Ежедневный график движения"
+      "duration": "",
+      "schedule": "ежедневно"
     },
     {
       "train_no": "6018",
       "route_from": "Пост Списывания",
       "route_to": "Днепр",
-      "station_from": "Верховцево",
-      "station_to": "Запорожье-Каменское",
+      "station_from": "Пост Списывания",
+      "station_to": "Днепр",
       "departure": "09:21",
       "arrival": "10:10",
-      "duration": "49 м",
-      "schedule": "Ежедневный график движения"
+      "duration": "",
+      "schedule": "ежедневно"
     },
     {
       "train_no": "6022",
       "route_from": "Кривой Рог",
       "route_to": "Днепр",
-      "station_from": "Верховцево",
-      "station_to": "Запорожье-Каменское",
+      "station_from": "Кривой Рог",
+      "station_to": "Днепр",
       "departure": "12:20",
       "arrival": "13:04",
-      "duration": "44 м",
-      "schedule": "Ежедневный график движения"
+      "duration": "",
+      "schedule": "ежедневно"
     },
     {
       "train_no": "6038",
       "route_from": "Пятихатки",
       "route_to": "Днепр",
-      "station_from": "Верховцево",
-      "station_to": "Запорожье-Каменское",
+      "station_from": "Пятихатки",
+      "station_to": "Днепр",
       "departure": "17:44",
       "arrival": "18:31",
-      "duration": "47 м",
-      "schedule": "Ежедневный график движения"
+      "duration": "",
+      "schedule": "ежедневно"
     },
     {
       "train_no": "6044",
       "route_from": "Пост Списывания",
       "route_to": "Днепр",
-      "station_from": "Верховцево",
-      "station_to": "Запорожье-Каменское",
+      "station_from": "Пост Списывания",
+      "station_to": "Днепр",
       "departure": "21:40",
       "arrival": "22:26",
-      "duration": "46 м",
-      "schedule": "Ежедневный график движения"
+      "duration": "",
+      "schedule": "ежедневно"
     }
   ]
 }
