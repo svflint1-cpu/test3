@@ -1,6 +1,8 @@
 import json
 import re
+import os
 from pathlib import Path
+from datetime import datetime, timezone
 
 import requests
 from bs4 import BeautifulSoup
@@ -18,7 +20,6 @@ def fetch_html() -> str:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Connection": "keep-alive",
     }
-
     resp = requests.get(URL, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.text
@@ -38,7 +39,6 @@ def parse_schedule(html: str):
 
     block = text[start_idx:end_idx]
     lines = [normalize_space(x) for x in block.splitlines() if normalize_space(x)]
-
     train_positions = [i for i, line in enumerate(lines) if re.match(r"^\d{4,5}\*?$", line)]
     if not train_positions:
         raise RuntimeError("Не удалось выделить строки поездов.")
@@ -57,9 +57,9 @@ def parse_schedule(html: str):
         duration = next((x for x in chunk if re.search(r"\bч\b|\bм\b", x) and re.search(r"\d", x)), "")
         schedule = ""
         for x in reversed(chunk):
-            if "график" in x.lower():
-                schedule = x.replace(" - посмотреть", "")
-                break
+          if "график" in x.lower():
+              schedule = x.replace(" - посмотреть", "")
+              break
 
         arrow_idx = chunk.index("→") if "→" in chunk else -1
         route_from, route_to = "", ""
@@ -92,19 +92,87 @@ def parse_schedule(html: str):
 
     if not records:
         raise RuntimeError("После парсинга не осталось валидных записей.")
-
     return records
 
+def load_previous():
+    if not OUTPUT.exists():
+        return None
+    try:
+        return json.loads(OUTPUT.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+def diff_items(old_items, new_items):
+    old_map = {item["train_no"]: item for item in old_items}
+    new_map = {item["train_no"]: item for item in new_items}
+    changes = []
+
+    for train_no in sorted(set(new_map) - set(old_map)):
+        item = new_map[train_no]
+        changes.append(f"🆕 Новый поезд {train_no}: {item['departure']} → {item['arrival']}")
+
+    for train_no in sorted(set(old_map) - set(new_map)):
+        item = old_map[train_no]
+        changes.append(f"❌ Поезд исчез {train_no}: раньше было {item['departure']} → {item['arrival']}")
+
+    for train_no in sorted(set(new_map) & set(old_map)):
+        old_item = old_map[train_no]
+        new_item = new_map[train_no]
+        tracked_fields = {
+            "departure": "отправление",
+            "arrival": "прибытие",
+            "duration": "время в пути",
+            "schedule": "график",
+        }
+        local_changes = []
+        for key, label in tracked_fields.items():
+            if old_item.get(key) != new_item.get(key):
+                local_changes.append(f"{label}: {old_item.get(key, '')} → {new_item.get(key, '')}")
+        if local_changes:
+            changes.append(f"⚠️ Поезд {train_no}: " + "; ".join(local_changes))
+
+    return changes
+
+def send_telegram(text):
+    token = os.getenv("BOT_TOKEN", "").strip()
+    chat_id = os.getenv("CHAT_ID", "").strip()
+    if not token or not chat_id:
+        print("Telegram secrets не заданы, пропускаю уведомление.")
+        return
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    resp = requests.post(url, json={
+        "chat_id": chat_id,
+        "text": text[:4096],
+        "disable_web_page_preview": True,
+    }, timeout=30)
+    resp.raise_for_status()
+
 def main():
+    previous = load_previous()
     html = fetch_html()
     items = parse_schedule(html)
+
+    old_items = previous.get("items", []) if previous else []
+    changes = diff_items(old_items, items) if previous else []
+
     payload = {
         "source": URL,
-        "updated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "has_changes": bool(changes),
+        "changes": changes,
         "items": items,
     }
+
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Saved {len(items)} trains to {OUTPUT}")
+
+    if changes:
+        message = "⚠️ Изменилось расписание Верховцево → Каменское\\n\\n" + "\\n".join(changes[:20])
+        send_telegram(message)
+        print(f"Sent changes: {len(changes)}")
+    else:
+        print("Изменений нет.")
 
 if __name__ == "__main__":
     main()
