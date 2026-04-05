@@ -27,71 +27,54 @@ def fetch_html() -> str:
 def parse_schedule(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True).replace("\xa0", " ")
-    start_marker = "Тип Номер Маршрут Отправление"
-    end_marker = "Выполнен поиск без указания даты."
 
-    start_idx = text.find(start_marker)
-    if start_idx == -1:
-        raise RuntimeError("Не найден блок расписания на странице.")
-    end_idx = text.find(end_marker, start_idx)
-    if end_idx == -1:
-        end_idx = len(text)
+    lines = [normalize_space(x) for x in text.splitlines() if normalize_space(x)]
 
-    block = text[start_idx:end_idx]
-    lines = [normalize_space(x) for x in block.splitlines() if normalize_space(x)]
-    train_positions = [i for i, line in enumerate(lines) if re.match(r"^\d{4,5}\*?$", line)]
+    # ищем все позиции поездов (6005, 6015 и т.д.)
+    train_positions = [
+        i for i, line in enumerate(lines)
+        if re.fullmatch(r"\d{4,5}", line)
+    ]
+
     if not train_positions:
-        raise RuntimeError("Не удалось выделить строки поездов.")
+        raise RuntimeError("Не найдено ни одного поезда")
 
     records = []
+
     for idx, pos in enumerate(train_positions):
         next_pos = train_positions[idx + 1] if idx + 1 < len(train_positions) else len(lines)
         chunk = lines[pos:next_pos]
 
-        train_no = chunk[0].replace("*", "")
-        times = [x for x in chunk if re.match(r"^\d{2}\.\d{2}$", x)]
+        train_no = chunk[0]
+
+        times = [x for x in chunk if re.fullmatch(r"\d{2}\.\d{2}", x)]
         if len(times) < 2:
             continue
 
-        departure, arrival = times[0], times[1]
-        duration = next((x for x in chunk if re.search(r"\bч\b|\bм\b", x) and re.search(r"\d", x)), "")
-        schedule = ""
-        for x in reversed(chunk):
-          if "график" in x.lower():
-              schedule = x.replace(" - посмотреть", "")
-              break
+        departure = times[0].replace(".", ":")
+        arrival = times[1].replace(".", ":")
 
-        arrow_idx = chunk.index("→") if "→" in chunk else -1
-        route_from, route_to = "", ""
-        if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
-            route_from = chunk[arrow_idx - 1]
-            route_to = chunk[arrow_idx + 1]
+        route_from = ""
+        route_to = ""
 
-        station_from, station_to = "", ""
-        try:
-            dep_idx = chunk.index(departure)
-            if dep_idx + 1 < len(chunk):
-                station_from = chunk[dep_idx + 1]
-            arr_idx = chunk.index(arrival, dep_idx + 1)
-            if arr_idx + 1 < len(chunk):
-                station_to = chunk[arr_idx + 1]
-        except ValueError:
-            pass
+        if "→" in chunk:
+            arrow_idx = chunk.index("→")
+            if arrow_idx > 0 and arrow_idx + 1 < len(chunk):
+                route_from = chunk[arrow_idx - 1]
+                route_to = chunk[arrow_idx + 1]
 
         records.append({
             "train_no": train_no,
             "route_from": route_from,
             "route_to": route_to,
-            "station_from": station_from,
-            "station_to": station_to,
-            "departure": departure.replace(".", ":"),
-            "arrival": arrival.replace(".", ":"),
-            "duration": duration,
-            "schedule": schedule,
+            "station_from": route_from,
+            "station_to": route_to,
+            "departure": departure,
+            "arrival": arrival,
+            "duration": "",
+            "schedule": "ежедневно"
         })
 
-    if not records:
-        raise RuntimeError("После парсинга не осталось валидных записей.")
     return records
 
 def load_previous():
