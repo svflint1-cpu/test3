@@ -25,11 +25,13 @@ def parse_schedule(html: str):
                 route_from = ""
                 route_to = ""
 
-                if "→" in chunk:
-                    idx = chunk.index("→")
-                    if idx > 0 and idx + 1 < len(chunk):
-                        route_from = chunk[idx - 1]
-                        route_to = chunk[idx + 1]
+                if any("→" in x for x in chunk):
+    for j, val in enumerate(chunk):
+        if "→" in val:
+            if j > 0 and j + 1 < len(chunk):
+                route_from = chunk[j - 1]
+                route_to = chunk[j + 1]
+                break
 
                 records.append({
                     "train_no": train_no,
@@ -43,7 +45,7 @@ def parse_schedule(html: str):
                     "schedule": "ежедневно"
                 })
 
-                i += 10
+                i += 1
                 continue
 
         i += 1
