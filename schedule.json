@@ -2,13 +2,9 @@
   "route_name": "forward",
   "route_title": "Верховцево → Каменское",
   "source": "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/",
-  "updated_at": "2026-06-27T21:33:16.494497+00:00",
-  "has_changes": true,
-  "changes": [
-    "⚠️ Поезд 6008: отправление: 05:36 → 05:45; прибытие: 06:46 → 06:41; время в пути: 1 ч 10 м → 56 м",
-    "⚠️ Поезд 6010: прибытие: 07:22 → 07:19; время в пути: 1 ч 3 м → 1 ч",
-    "⚠️ Поезд 6022: отправление: 12:20 → 12:19; прибытие: 13:04 → 13:03"
-  ],
+  "updated_at": "2026-06-27T22:40:21.613720+00:00",
+  "has_changes": false,
+  "changes": [],
   "items": [
     {
       "train_no": "6008",
