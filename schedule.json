@@ -2,9 +2,13 @@
   "route_name": "forward",
   "route_title": "Верховцево → Каменское",
   "source": "https://poizdato.net/ru/raspisanie-poezdov/verhovtsevo--kamenskoe/elektrichki/",
-  "updated_at": "2026-06-27T20:17:03.758185+00:00",
-  "has_changes": false,
-  "changes": [],
+  "updated_at": "2026-06-27T21:33:16.494497+00:00",
+  "has_changes": true,
+  "changes": [
+    "⚠️ Поезд 6008: отправление: 05:36 → 05:45; прибытие: 06:46 → 06:41; время в пути: 1 ч 10 м → 56 м",
+    "⚠️ Поезд 6010: прибытие: 07:22 → 07:19; время в пути: 1 ч 3 м → 1 ч",
+    "⚠️ Поезд 6022: отправление: 12:20 → 12:19; прибытие: 13:04 → 13:03"
+  ],
   "items": [
     {
       "train_no": "6008",
@@ -12,9 +16,9 @@
       "route_to": "Днепр",
       "station_from": "Пятихатки",
       "station_to": "Днепр",
-      "departure": "05:36",
-      "arrival": "06:46",
-      "duration": "1 ч 10 м",
+      "departure": "05:45",
+      "arrival": "06:41",
+      "duration": "56 м",
       "schedule": "ежедневно"
     },
     {
@@ -24,8 +28,8 @@
       "station_from": "Пятихатки",
       "station_to": "Днепр",
       "departure": "06:19",
-      "arrival": "07:22",
-      "duration": "1 ч 3 м",
+      "arrival": "07:19",
+      "duration": "1 ч",
       "schedule": "ежедневно"
     },
     {
@@ -45,8 +49,8 @@
       "route_to": "Днепр",
       "station_from": "Кривой Рог",
       "station_to": "Днепр",
-      "departure": "12:20",
-      "arrival": "13:04",
+      "departure": "12:19",
+      "arrival": "13:03",
       "duration": "44 м",
       "schedule": "ежедневно"
     },

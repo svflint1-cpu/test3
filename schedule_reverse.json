@@ -2,9 +2,14 @@
   "route_name": "reverse",
   "route_title": "Каменское → Верховцево",
   "source": "https://poizdato.net/ru/raspisanie-poezdov/kamenskoe--verhovtsevo/elektrichki/",
-  "updated_at": "2026-06-27T20:17:04.728215+00:00",
-  "has_changes": false,
-  "changes": [],
+  "updated_at": "2026-06-27T21:33:17.475509+00:00",
+  "has_changes": true,
+  "changes": [
+    "⚠️ Поезд 6015: отправление: 09:15 → 09:25; прибытие: 10:03 → 10:13",
+    "⚠️ Поезд 6027: отправление: 13:44 → 13:48; прибытие: 14:32 → 14:48; время в пути: 48 м → 1 ч",
+    "⚠️ Поезд 6035: отправление: 17:39 → 17:37; прибытие: 18:27 → 18:25",
+    "⚠️ Поезд 6043: отправление: 21:11 → 21:13; прибытие: 21:59 → 22:01"
+  ],
   "items": [
     {
       "train_no": "6005",
@@ -23,8 +28,8 @@
       "route_to": "Пятихатки",
       "station_from": "Днепр",
       "station_to": "Пятихатки",
-      "departure": "09:15",
-      "arrival": "10:03",
+      "departure": "09:25",
+      "arrival": "10:13",
       "duration": "48 м",
       "schedule": "ежедневно"
     },
@@ -34,9 +39,9 @@
       "route_to": "Кривой Рог",
       "station_from": "Днепр",
       "station_to": "Кривой Рог",
-      "departure": "13:44",
-      "arrival": "14:32",
-      "duration": "48 м",
+      "departure": "13:48",
+      "arrival": "14:48",
+      "duration": "1 ч",
       "schedule": "ежедневно"
     },
     {
@@ -45,8 +50,8 @@
       "route_to": "Пост Списывания",
       "station_from": "Днепр",
       "station_to": "Пост Списывания",
-      "departure": "17:39",
-      "arrival": "18:27",
+      "departure": "17:37",
+      "arrival": "18:25",
       "duration": "48 м",
       "schedule": "ежедневно"
     },
@@ -67,8 +72,8 @@
       "route_to": "Пятихатки",
       "station_from": "Днепр",
       "station_to": "Пятихатки",
-      "departure": "21:11",
-      "arrival": "21:59",
+      "departure": "21:13",
+      "arrival": "22:01",
       "duration": "48 м",
       "schedule": "ежедневно"
     }
