@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админ панель</title>
+
+<style>
+body{
+    margin:0;
+    background:#202020;
+    color:white;
+    font-family:Arial;
+}
+
+header{
+    background:#0088cc;
+    padding:15px;
+    font-size:24px;
+    text-align:center;
+}
+
+#users{
+    padding:15px;
+}
+
+.card{
+    background:#2f2f2f;
+    margin-bottom:15px;
+    border-radius:12px;
+    padding:15px;
+}
+
+.username{
+    font-size:22px;
+    font-weight:bold;
+}
+
+.info{
+    margin-top:8px;
+    color:#bdbdbd;
+}
+
+.visit{
+    margin-top:4px;
+    color:#8be38b;
+}
+
+button{
+    width:100%;
+    padding:10px;
+    margin-top:10px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    background:#0088cc;
+    color:white;
+}
+</style>
+
+</head>
+<body>
+
+<header>
+
+👥 Пользователи
+
+</header>
+
+<div id="users">
+
+Загрузка...
+
+</div>
+
+<script type="module" src="firebase.js"></script>
+<script type="module" src="users.js"></script>
+
+</body>
+</html>
